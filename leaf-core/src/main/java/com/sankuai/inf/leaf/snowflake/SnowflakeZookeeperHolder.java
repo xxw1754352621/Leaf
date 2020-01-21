@@ -52,7 +52,7 @@ public class SnowflakeZookeeperHolder {
             curator.start();
             Stat stat = curator.checkExists().forPath(PATH_FOREVER);
             if (stat == null) {
-                //不存在根节点,机器第一次启动,创建/snowflake/ip:port-000000000,并上传数据
+                //todo:不存在【根节点】,机器第一次启动,创建/snowflake/ip:port-000000000,并上传数据
                 zk_AddressNode = createNode(curator);
                 //worker id 默认是0
                 updateLocalWorkerID(workerID);
@@ -62,7 +62,7 @@ public class SnowflakeZookeeperHolder {
             } else {
                 Map<String, Integer> nodeMap = Maps.newHashMap();//ip:port->00001
                 Map<String, String> realNode = Maps.newHashMap();//ip:port->(ipport-000001)
-                //存在根节点,先检查是否有属于自己的根节点
+                //todo:存在根节点,先检查是否有属于自己的根节点
                 List<String> keys = curator.getChildren().forPath(PATH_FOREVER);
                 for (String key : keys) {
                     String[] nodeKey = key.split("-");
@@ -71,18 +71,19 @@ public class SnowflakeZookeeperHolder {
                 }
                 Integer workerid = nodeMap.get(listenAddress);
                 if (workerid != null) {
-                    //有自己的节点,zk_AddressNode=ip:port
+                    //todo:有自己的节点,zk_AddressNode=ip:port
                     zk_AddressNode = PATH_FOREVER + "/" + realNode.get(listenAddress);
                     workerID = workerid;//启动worder时使用会使用
-                    if (!checkInitTimeStamp(curator, zk_AddressNode)) {
+                    if (checkInitTimeStamp(curator, zk_AddressNode)) {
                         throw new CheckLastTimeException("init timestamp check error,forever node timestamp gt this node time");
                     }
-                    //准备创建临时节点
+                    //todo:准备创建临时节点
+                    //todo:rpc检验不同不服务器的时钟，目前已去掉
                     doService(curator);
                     updateLocalWorkerID(workerID);
                     LOGGER.info("[Old NODE]find forever node have this endpoint ip-{} port-{} workid-{} childnode and start SUCCESS", ip, port, workerID);
                 } else {
-                    //表示新启动的节点,创建持久节点 ,不用check时间
+                    //todo：表示新启动的节点,创建持久节点 ,不用check时间
                     String newNode = createNode(curator);
                     zk_AddressNode = newNode;
                     String[] nodeKey = newNode.split("-");
@@ -132,7 +133,7 @@ public class SnowflakeZookeeperHolder {
         byte[] bytes = curator.getData().forPath(zk_AddressNode);
         Endpoint endPoint = deBuildData(new String(bytes));
         //该节点的时间不能小于最后一次上报的时间
-        return !(endPoint.getTimestamp() > System.currentTimeMillis());
+        return endPoint.getTimestamp() > System.currentTimeMillis();
     }
 
     /**

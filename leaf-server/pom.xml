@@ -39,11 +39,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>com.sankuai.inf.leaf</groupId>
             <artifactId>leaf-core</artifactId>
         </dependency>
@@ -61,6 +56,12 @@
                     <groupId>log4j</groupId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <!-- 测试模块-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>junit</groupId>

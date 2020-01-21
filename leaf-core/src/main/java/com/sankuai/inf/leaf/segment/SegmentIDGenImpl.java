@@ -38,7 +38,7 @@ public class SegmentIDGenImpl implements IDGen {
      */
     private static final long SEGMENT_DURATION = 15 * 60 * 1000L;
     private ExecutorService service = new ThreadPoolExecutor(5, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>(), new UpdateThreadFactory());
-    private volatile boolean initOK = false;
+    private volatile boolean dbInitOK = false;
     private Map<String, SegmentBuffer> cache = new ConcurrentHashMap<String, SegmentBuffer>();
     private IDAllocDao dao;
 
@@ -61,9 +61,9 @@ public class SegmentIDGenImpl implements IDGen {
         logger.info("Init ...");
         // 确保加载到kv后才初始化成功
         updateCacheFromDb();
-        initOK = true;
+        dbInitOK = true;
         updateCacheFromDbAtEveryMinute();
-        return initOK;
+        return dbInitOK;
     }
 
     private void updateCacheFromDbAtEveryMinute() {
@@ -122,12 +122,15 @@ public class SegmentIDGenImpl implements IDGen {
 
     @Override
     public Result get(final String key) {
-        if (!initOK) {
+        if (!dbInitOK) {
             return new Result(EXCEPTION_ID_IDCACHE_INIT_FALSE, Status.EXCEPTION);
         }
         if (cache.containsKey(key)) {
             SegmentBuffer buffer = cache.get(key);
             if (!buffer.isInitOk()) {
+                /**
+                 * todo: 重启后第一次拉取数据，需要提前预热到缓存
+                 * */
                 synchronized (buffer) {
                     if (!buffer.isInitOk()) {
                         try {
@@ -153,12 +156,20 @@ public class SegmentIDGenImpl implements IDGen {
             leafAlloc = dao.updateMaxIdAndGetLeafAlloc(key);
             buffer.setStep(leafAlloc.getStep());
             buffer.setMinStep(leafAlloc.getStep());//leafAlloc中的step为DB中的step
-        } else if (buffer.getUpdateTimestamp() == 0) {
+        }
+        /**
+         * todo:服务启动就一直没有使用
+         */
+        else if (buffer.getUpdateTimestamp() == 0) {
             leafAlloc = dao.updateMaxIdAndGetLeafAlloc(key);
             buffer.setUpdateTimestamp(System.currentTimeMillis());
             buffer.setStep(leafAlloc.getStep());
             buffer.setMinStep(leafAlloc.getStep());//leafAlloc中的step为DB中的step
-        } else {
+        }
+        else {
+            /**
+             * todo:根据实时取用tps，更新step，消费快，则增大step
+             */
             long duration = System.currentTimeMillis() - buffer.getUpdateTimestamp();
             int nextStep = buffer.getStep();
             if (duration < SEGMENT_DURATION) {
@@ -181,7 +192,7 @@ public class SegmentIDGenImpl implements IDGen {
             buffer.setStep(nextStep);
             buffer.setMinStep(leafAlloc.getStep());//leafAlloc的step为DB中的step
         }
-        // must set value before set max
+        //todo: must set value before set max
         long value = leafAlloc.getMaxId() - buffer.getStep();
         segment.getValue().set(value);
         segment.setMax(leafAlloc.getMaxId());

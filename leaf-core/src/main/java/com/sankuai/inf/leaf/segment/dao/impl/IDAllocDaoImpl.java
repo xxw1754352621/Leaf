@@ -1,5 +1,6 @@
 package com.sankuai.inf.leaf.segment.dao.impl;
 
+import com.sankuai.inf.leaf.segment.SegmentIDGenImpl;
 import com.sankuai.inf.leaf.segment.dao.IDAllocDao;
 import com.sankuai.inf.leaf.segment.dao.IDAllocMapper;
 import com.sankuai.inf.leaf.segment.model.LeafAlloc;
@@ -14,6 +15,10 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import javax.sql.DataSource;
 import java.util.List;
 
+/**
+ * todo:优化->不使用mapper代理
+ * @see SegmentIDGenImpl#updateCacheFromDb() 定时任务使用到
+ */
 public class IDAllocDaoImpl implements IDAllocDao {
 
     SqlSessionFactory sqlSessionFactory;
