@@ -13,6 +13,7 @@ import java.util.Random;
 /**
  * todo：二进制为31位1，整数2147483647, 时间为：2038-01-19 11:14:07的时间戳
  * todo：二进制为41位1，41-bit的时间可以表示（1L<<41）/(1000L*3600*24*365)近69年的时间
+ *
  * @link <https://tech.meituan.com/2017/04/21/mt-leaf.html/>
  */
 public class SnowflakeIDGenImpl implements IDGen {
@@ -62,7 +63,9 @@ public class SnowflakeIDGenImpl implements IDGen {
         Preconditions.checkArgument(workerId >= 0 && workerId <= maxWorkerId, "workerID must gte 0 and lte 1023");
     }
 
-    /* synchronized 同步锁*/
+    /**
+     * todo:雪花模式 synchronized 同步锁
+     **/
     @Override
     public synchronized Result get(String key) {
         long timestamp = timeGen();

@@ -4,14 +4,25 @@ import com.sankuai.inf.leaf.IDGen;
 import com.sankuai.inf.leaf.common.Result;
 import com.sankuai.inf.leaf.common.Status;
 import com.sankuai.inf.leaf.segment.dao.IDAllocDao;
-import com.sankuai.inf.leaf.segment.model.*;
+import com.sankuai.inf.leaf.segment.model.LeafAlloc;
+import com.sankuai.inf.leaf.segment.model.Segment;
+import com.sankuai.inf.leaf.segment.model.SegmentBuffer;
 import org.perf4j.StopWatch;
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class SegmentIDGenImpl implements IDGen {
@@ -95,7 +106,7 @@ public class SegmentIDGenImpl implements IDGen {
             List<String> cacheTags = new ArrayList<String>(cache.keySet());
             List<String> insertTags = new ArrayList<String>(dbTags);
             List<String> removeTags = new ArrayList<String>(cacheTags);
-            //db中新加的tags灌进cache
+            //todo：db中新加的tags灌进cache
             insertTags.removeAll(cacheTags);
             for (String tag : insertTags) {
                 SegmentBuffer buffer = new SegmentBuffer();
@@ -165,8 +176,7 @@ public class SegmentIDGenImpl implements IDGen {
             buffer.setUpdateTimestamp(System.currentTimeMillis());
             buffer.setStep(leafAlloc.getStep());
             buffer.setMinStep(leafAlloc.getStep());//leafAlloc中的step为DB中的step
-        }
-        else {
+        } else {
             /**
              * todo:根据实时取用tps，更新step，消费快，则增大step
              */
@@ -183,7 +193,7 @@ public class SegmentIDGenImpl implements IDGen {
             } else {
                 nextStep = nextStep / 2 >= buffer.getMinStep() ? nextStep / 2 : nextStep;
             }
-            logger.info("leafKey[{}], step[{}], duration[{}mins], nextStep[{}]", key, buffer.getStep(), String.format("%.2f",((double)duration / (1000 * 60))), nextStep);
+            logger.info("leafKey[{}], step[{}], duration[{}mins], nextStep[{}]", key, buffer.getStep(), String.format("%.2f", ((double) duration / (1000 * 60))), nextStep);
             LeafAlloc temp = new LeafAlloc();
             temp.setKey(key);
             temp.setStep(nextStep);
@@ -204,6 +214,9 @@ public class SegmentIDGenImpl implements IDGen {
         while (true) {
             buffer.rLock().lock();
             try {
+                /**
+                 *todo:获取 segments[currentPos]
+                 */
                 final Segment segment = buffer.getCurrent();
                 if (!buffer.isNextReady() && (segment.getIdle() < 0.9 * segment.getStep()) && buffer.getThreadRunning().compareAndSet(false, true)) {
                     service.execute(new Runnable() {
@@ -218,6 +231,9 @@ public class SegmentIDGenImpl implements IDGen {
                             } catch (Exception e) {
                                 logger.warn(buffer.getKey() + " updateSegmentFromDb exception", e);
                             } finally {
+                                /**
+                                 * todo：下一个号段准备好
+                                 * */
                                 if (updateOk) {
                                     buffer.wLock().lock();
                                     buffer.setNextReady(true);
@@ -231,24 +247,40 @@ public class SegmentIDGenImpl implements IDGen {
                     });
                 }
                 long value = segment.getValue().getAndIncrement();
+                /**
+                 * todo: id 正常返回
+                 */
                 if (value < segment.getMax()) {
                     return new Result(value, Status.SUCCESS);
                 }
             } finally {
                 buffer.rLock().unlock();
             }
+            /**
+             * todo:当前segment用完，threadRunning已经被修改为true 或者 数据库还没有更新，开始等待 【自旋+睡眠10ms】其他线程切换成功 或者 数据库更新成功
+             */
             waitAndSleep(buffer);
             buffer.wLock().lock();
             try {
+                /**
+                 * todo：重新获取当前segment，是否其他线程已经帮忙切换完成
+                 * */
                 final Segment segment = buffer.getCurrent();
                 long value = segment.getValue().getAndIncrement();
                 if (value < segment.getMax()) {
                     return new Result(value, Status.SUCCESS);
                 }
+                /**
+                 * todo：成功切换到另外一个segment，继续循环
+                 * */
                 if (buffer.isNextReady()) {
                     buffer.switchPos();
                     buffer.setNextReady(false);
-                } else {
+                }
+                /**
+                 * todo: 高并发下，waitAndSleep(buffer)之后，依然没有准备好第二个segment（异步线程没有执行完）
+                 */
+                else {
                     logger.error("Both two segments in {} are not ready!", buffer);
                     return new Result(EXCEPTION_ID_TWO_SEGMENTS_ARE_NULL, Status.EXCEPTION);
                 }
@@ -260,14 +292,18 @@ public class SegmentIDGenImpl implements IDGen {
 
     private void waitAndSleep(SegmentBuffer buffer) {
         int roll = 0;
+        /**
+         * todo：线程在运行中， 才会自旋计数大于1万，则睡眠10毫秒。
+         *
+         * */
         while (buffer.getThreadRunning().get()) {
             roll += 1;
-            if(roll > 10000) {
+            if (roll > 10000) {
                 try {
                     TimeUnit.MILLISECONDS.sleep(10);
                     break;
                 } catch (InterruptedException e) {
-                    logger.warn("Thread {} Interrupted",Thread.currentThread().getName());
+                    logger.warn("Thread {} Interrupted", Thread.currentThread().getName());
                     break;
                 }
             }

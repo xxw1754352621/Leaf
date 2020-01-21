@@ -7,7 +7,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * 双buffer
+ * todo:双buffer
  */
 public class SegmentBuffer {
     private String key;
