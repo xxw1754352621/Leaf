@@ -71,7 +71,7 @@ public class SnowflakeIDGenImpl implements IDGen {
         long timestamp = timeGen();
         /**
          * todo：由于强依赖时钟，对时间的要求比较敏感，在机器工作时NTP同步也会造成秒级别的回退，建议可以直接关闭NTP同步。要么在时钟回拨的时候直接不提供服务直接返回ERROR_CODE，等时钟追上即可。或者做一层重试，然后上报报警系统，更或者是发现有时钟回拨之后自动摘除本身节点并报警，如下：
-         * todo：2017闰秒回拨，回拨一秒，这个时间不可用
+         * todo：2017闰秒回拨，回拨一秒，这个时间可能造成系统不可用
          */
         if (timestamp < lastTimestamp) {
             long offset = lastTimestamp - timestamp;

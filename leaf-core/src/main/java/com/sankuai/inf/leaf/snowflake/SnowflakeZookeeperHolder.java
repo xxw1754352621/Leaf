@@ -75,7 +75,7 @@ public class SnowflakeZookeeperHolder {
                     zk_AddressNode = PATH_FOREVER + "/" + realNode.get(listenAddress);
                     workerID = workerid;//启动worder时使用会使用
                     if (checkInitTimeStamp(curator, zk_AddressNode)) {
-                        throw new CheckLastTimeException("init timestamp check error,forever node timestamp gt this node time");
+                        throw new CheckLastTimeException("init timestamp check error,forever node timestamp gt [大于] this node time");
                     }
                     //todo:准备创建临时节点
                     //todo:rpc检验不同不服务器的时钟，目前已去掉
